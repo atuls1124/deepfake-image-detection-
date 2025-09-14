@@ -1,0 +1,294 @@
+<!-- templates/index.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Deepfake Detection</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .container {
+            text-align: center;
+        }
+        h1 {
+            color: #333;
+        }
+        .upload-area {
+            border: 2px dashed #ccc;
+            padding: 20px;
+            margin: 20px 0;
+            cursor: pointer;
+        }
+        .upload-area:hover {
+            border-color: #aaa;
+        }
+        #file-input {
+            display: none;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 10px;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        #upload-status {
+            margin-top: 15px;
+            padding: 10px;
+            background-color: #e8f5e9;
+            border-radius: 4px;
+            display: none;
+        }
+        #result-container {
+            margin-top: 20px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            display: none;
+        }
+        .progress-bar {
+            width: 100%;
+            background-color: #f3f3f3;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+        .progress {
+            height: 20px;
+            border-radius: 4px;
+            text-align: center;
+            line-height: 20px;
+            color: white;
+        }
+        .real {
+            background-color: #4CAF50;
+        }
+        .fake {
+            background-color: #f44336;
+        }
+        #preview-image {
+            max-width: 100%;
+            max-height: 300px;
+            margin-top: 20px;
+        }
+        .button-group {
+            margin-top: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Deepfake Face Image Detection</h1>
+        <p>Upload an image to check if it's a deepfake or real.</p>
+        
+        <div class="upload-area" id="upload-area" onclick="document.getElementById('file-input').click()">
+            <p>Click to upload an image or drop it here</p>
+            <input type="file" id="file-input" accept="image/*">
+        </div>
+        
+        <!-- Upload status indicator -->
+        <div id="upload-status">
+            <h3>Image Uploaded Successfully!</h3>
+            <p id="file-name"></p>
+        </div>
+        
+        <div class="button-group">
+            <button id="detect-button" disabled>Detect Deepfake</button>
+            <button id="reset-button" style="display: none; background-color: #2196F3;">Upload Another Image</button>
+        </div>
+        
+        <div id="result-container">
+            <h2>Detection Result</h2>
+            <p id="result-text"></p>
+            
+            <div class="progress-bar">
+                <div id="real-progress" class="progress real" style="width: 0%">0%</div>
+            </div>
+            <p>Real Probability</p>
+            
+            <div class="progress-bar">
+                <div id="fake-progress" class="progress fake" style="width: 0%">0%</div>
+            </div>
+            <p>Fake Probability</p>
+            
+            <img id="preview-image" src="" alt="Uploaded image">
+        </div>
+    </div>
+
+    <script>
+        const fileInput = document.getElementById('file-input');
+        const detectButton = document.getElementById('detect-button');
+        const resetButton = document.getElementById('reset-button');
+        const resultContainer = document.getElementById('result-container');
+        const resultText = document.getElementById('result-text');
+        const realProgress = document.getElementById('real-progress');
+        const fakeProgress = document.getElementById('fake-progress');
+        const previewImage = document.getElementById('preview-image');
+        const uploadStatus = document.getElementById('upload-status');
+        const fileName = document.getElementById('file-name');
+        const uploadArea = document.getElementById('upload-area');
+        
+        fileInput.addEventListener('change', function() {
+            if (fileInput.files.length > 0) {
+                detectButton.disabled = false;
+                
+                // Show upload status
+                uploadStatus.style.display = 'block';
+                fileName.textContent = "File: " + fileInput.files[0].name;
+                
+                // Preview the image
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    previewImage.src = e.target.result;
+                };
+                reader.readAsDataURL(fileInput.files[0]);
+                
+                // Show reset button
+                resetButton.style.display = 'inline-block';
+                
+                // Hide the upload area since we only want one image at a time
+                uploadArea.style.display = 'none';
+            } else {
+                detectButton.disabled = true;
+            }
+        });
+        
+        detectButton.addEventListener('click', function() {
+            if (fileInput.files.length === 0) return;
+            
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            
+            // Show loading state
+            detectButton.disabled = true;
+            detectButton.textContent = 'Processing...';
+            
+            fetch('/detect', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    resultText.textContent = 'Error: ' + data.error;
+                } else {
+                    // Update the result display
+                    resultText.textContent = `Prediction: ${data.prediction} (Confidence: ${data.confidence.toFixed(2)}%)`;
+                    
+                    // Update progress bars
+                    realProgress.style.width = `${data.real_probability}%`;
+                    realProgress.textContent = `${data.real_probability.toFixed(2)}%`;
+                    
+                    fakeProgress.style.width = `${data.fake_probability}%`;
+                    fakeProgress.textContent = `${data.fake_probability.toFixed(2)}%`;
+                    
+                    // Use the saved image path
+                    previewImage.src = data.image_path;
+                }
+                
+                // Show the result container
+                resultContainer.style.display = 'block';
+                
+                // Reset button
+                detectButton.disabled = false;
+                detectButton.textContent = 'Detect Deepfake';
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                resultText.textContent = 'An error occurred while processing the request.';
+                detectButton.disabled = false;
+                detectButton.textContent = 'Detect Deepfake';
+            });
+        });
+        
+        // Reset for uploading a new image
+        resetButton.addEventListener('click', function() {
+            // Clear file input
+            fileInput.value = '';
+            
+            // Hide results and status
+            resultContainer.style.display = 'none';
+            uploadStatus.style.display = 'none';
+            
+            // Show upload area again
+            uploadArea.style.display = 'block';
+            
+            // Hide reset button
+            resetButton.style.display = 'none';
+            
+            // Disable detect button
+            detectButton.disabled = true;
+        });
+        
+        // Drag and drop functionality
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            uploadArea.addEventListener(eventName, preventDefaults, false);
+        });
+        
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        
+        ['dragenter', 'dragover'].forEach(eventName => {
+            uploadArea.addEventListener(eventName, highlight, false);
+        });
+        
+        ['dragleave', 'drop'].forEach(eventName => {
+            uploadArea.addEventListener(eventName, unhighlight, false);
+        });
+        
+        function highlight() {
+            uploadArea.style.borderColor = '#2196F3';
+        }
+        
+        function unhighlight() {
+            uploadArea.style.borderColor = '#ccc';
+        }
+        
+        uploadArea.addEventListener('drop', handleDrop, false);
+        
+        function handleDrop(e) {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            
+            if (files.length > 0 && files[0].type.startsWith('image/')) {
+                fileInput.files = files;
+                
+                // Trigger the same actions as the file input change event
+                detectButton.disabled = false;
+                uploadStatus.style.display = 'block';
+                fileName.textContent = "File: " + files[0].name;
+                
+                // Preview the image
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    previewImage.src = e.target.result;
+                };
+                reader.readAsDataURL(files[0]);
+                
+                // Show reset button
+                resetButton.style.display = 'inline-block';
+                
+                // Hide the upload area since we only want one image at a time
+                uploadArea.style.display = 'none';
+            }
+        }
+    </script>
+</body>
+</html>
